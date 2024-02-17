@@ -114,10 +114,14 @@ impl MoveResponse {
 /// Handles POST /start ... used to start a new game
 /// response is irrelevant as the battlesnake engine does not care
 pub async fn handle_game_start(
-    Json(_input): Json<EngineInput>,
+    Json(input): Json<EngineInput>,
 ) -> impl IntoResponse {
     //TODO: process the game start metadata
     tracing::info!("Game started");
+    tracing::info!("Game id: {}", input.game.id);
+    tracing::info!("Ruleset: {}", input.game.ruleset.name);
+    tracing::info!("Timeout: {}", input.game.timeout);
+    tracing::info!("Map: {}", input.game.map);
     StatusCode::OK
 }
 
@@ -128,13 +132,12 @@ pub async fn handle_game_over(
 ) -> impl IntoResponse {
     //TODO: log the game over event
     tracing::info!("Game ended");
+    tracing::info!("------------------\n");
     StatusCode::OK
 }
 
 /// Handles POST /move ... used to move the snake
 pub async fn handle_move(Json(input): Json<EngineInput>) -> impl IntoResponse {
-    tracing::debug!("Last move latency: {}", input.you.latency);
-
     let head = IVec2::from(input.you.head);
 
     let body = input
@@ -200,5 +203,8 @@ pub async fn handle_move(Json(input): Json<EngineInput>) -> impl IntoResponse {
     };
 
     tracing::info!("Turn: {:?} | Move: {:?}", input.turn, response.r#move);
+    tracing::debug!("Shout: {}", response.shout);
+    tracing::debug!("Last move latency: {}", input.you.latency);
+
     (StatusCode::OK, Json(response))
 }
