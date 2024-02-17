@@ -132,7 +132,7 @@ pub async fn handle_game_over(
 ) -> impl IntoResponse {
     //TODO: log the game over event
     tracing::info!("Game ended");
-    tracing::info!("------------------\n");
+    tracing::info!("------------------");
     StatusCode::OK
 }
 
@@ -161,6 +161,13 @@ pub async fn handle_move(Json(input): Json<EngineInput>) -> impl IntoResponse {
         .map(IVec2::from)
         .collect::<Vec<_>>();
 
+    let snakes = input
+        .board
+        .snakes
+        .into_iter()
+        .map(|s| s.body.into_iter().map(IVec2::from).collect::<Vec<_>>())
+        .collect::<Vec<_>>();
+
     let height = input.board.height;
     let width = input.board.width;
 
@@ -170,7 +177,9 @@ pub async fn handle_move(Json(input): Json<EngineInput>) -> impl IntoResponse {
             let next = head + m.coords();
             let inside_map =
                 next.x >= 0 && next.y >= 0 && next.x < width && next.y < height;
-            let colision = body.contains(&next) || obstacles.contains(&next);
+            let colision = body.contains(&next)
+                || obstacles.contains(&next)
+                || snakes.iter().any(|s| s.contains(&next));
 
             inside_map && !colision
         })
