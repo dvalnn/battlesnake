@@ -14,7 +14,7 @@ struct SnakeConfig {
 impl SnakeConfig {
     const API_VERSION: &'static str = "1";
     const AUTHOR: &'static str = "dvalinn";
-    const COLOR: &'static str = "#ff00ff";
+    const COLOR: &'static str = "#00E6BF";
     const HEAD: &'static str = "default";
     const TAIL: &'static str = "default";
     const VERSION: &'static str = "0.0.1-alpha.0";

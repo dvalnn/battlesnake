@@ -73,9 +73,13 @@ pub struct EngineInput {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 enum Movements {
+    #[serde(rename = "up")]
     Up,
+    #[serde(rename = "down")]
     Down,
+    #[serde(rename = "left")]
     Left,
+    #[serde(rename = "right")]
     Right,
 }
 
