@@ -123,12 +123,14 @@ pub async fn handle_game_over(
     Json(_input): Json<EngineInput>,
 ) -> impl IntoResponse {
     //TODO: log the game over event
-    tracing::info!("Game started");
+    tracing::info!("Game ended");
     StatusCode::OK
 }
 
 /// Handles POST /move ... used to move the snake
 pub async fn handle_move(Json(input): Json<EngineInput>) -> impl IntoResponse {
+    tracing::debug!("Last move latency: {}", input.you.latency);
+
     let head = IVec2::from(input.you.head);
 
     let body = input
