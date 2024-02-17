@@ -1,64 +1,9 @@
+use std::collections::HashMap;
+
 use axum::{http::StatusCode, response::IntoResponse, Json};
 use glam::Vec2;
 use serde::{Deserialize, Serialize};
-
-/// Handles POST /start ... used to start a new game
-/// response is irrelevant as the battlesnake engine does not care
-pub async fn handle_game_start(
-    Json(_input): Json<EngineInput>,
-) -> impl IntoResponse {
-    StatusCode::OK
-}
-
-/// Handles POST /end ... used to end the current game
-/// response is irrelevant as the battlesnake engine does not care
-pub async fn handle_game_over(
-    Json(_input): Json<EngineInput>,
-) -> impl IntoResponse {
-    StatusCode::OK
-}
-
-/// Handles POST /move ... used to move the snake
-pub async fn handle_move(Json(_input): Json<EngineInput>) -> impl IntoResponse {
-    let response = MoveResponse {
-        r#move: Movements::Up,
-        shout: None,
-    };
-    (StatusCode::OK, Json(response))
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Royale {
-    #[serde(alias = "shrinkEveryNTurns")]
-    shrink_every_n_turns: i32,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Squad {
-    #[serde(alias = "allowBodyCollisions")]
-    allow_body_collisions: bool,
-
-    #[serde(alias = "sharedElimination")]
-    shared_elimination: bool,
-
-    #[serde(alias = "sharedHealth")]
-    shared_health: bool,
-
-    #[serde(alias = "sharedLength")]
-    shared_lenght: bool,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct RulesetSettings {
-    #[serde(alias = "foodSpawnChance")]
-    food_spawn_chance: i32,
-
-    #[serde(alias = "minimumFood")]
-    minimum_food: i32,
-
-    #[serde(alias = "hazardDamagePerTurn")]
-    hazard_damage_per_turn: i32,
-}
+use serde_json::Value;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum GameSources {
@@ -73,7 +18,7 @@ pub enum GameSources {
 pub struct Ruleset {
     name: String,
     version: String,
-    settings: RulesetSettings,
+    settings: HashMap<String, Value>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -131,6 +76,24 @@ enum Movements {
     Right,
 }
 
+impl Movements {
+    const ALL: [Movements; 4] = [
+        Movements::Up,
+        Movements::Down,
+        Movements::Left,
+        Movements::Right,
+    ];
+
+    fn coords(&self) -> Vec2 {
+        match self {
+            Movements::Up => Vec2::new(0.0, 1.0),
+            Movements::Down => Vec2::new(0.0, -1.0),
+            Movements::Left => Vec2::new(-1.0, 0.0),
+            Movements::Right => Vec2::new(1.0, 0.0),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct MoveResponse {
     pub r#move: Movements,
@@ -138,5 +101,73 @@ struct MoveResponse {
 }
 
 impl MoveResponse {
-    const SHOUT_MAX_LENGTH: usize = 256;
+    const _SHOUT_MAX_LENGTH: usize = 256;
+}
+
+/// Handles POST /start ... used to start a new game
+/// response is irrelevant as the battlesnake engine does not care
+pub async fn handle_game_start(
+    Json(_input): Json<EngineInput>,
+) -> impl IntoResponse {
+    //TODO: process the game start metadata
+    tracing::info!("Game started");
+    StatusCode::OK
+}
+
+/// Handles POST /end ... used to end the current game
+/// response is irrelevant as the battlesnake engine does not care
+pub async fn handle_game_over(
+    Json(_input): Json<EngineInput>,
+) -> impl IntoResponse {
+    //TODO: log the game over event
+    tracing::info!("Game started");
+    StatusCode::OK
+}
+
+/// Handles POST /move ... used to move the snake
+pub async fn handle_move(Json(input): Json<EngineInput>) -> impl IntoResponse {
+    let head = &input.you.head;
+    let body = &input.you.body;
+    let obstacles = &input.board.hazards;
+    let food = &input.board.food;
+    let height = input.board.height;
+    let width = input.board.width;
+
+    let possible_moves = Movements::ALL
+        .iter()
+        .filter(|m| {
+            let next = *head + m.coords();
+            let inside_map = next.x >= 0.0
+                && next.y >= 0.0
+                && next.x < width as f32
+                && next.y < height as f32;
+            let colision = body.contains(&next) || obstacles.contains(&next);
+
+            inside_map && !colision
+        })
+        .collect::<Vec<_>>();
+
+    let closest_food = food
+        .iter()
+        .min_by_key(|f| {
+            let dist = (f.x - head.x).abs() + (f.y - head.y).abs();
+            dist as i32
+        })
+        .unwrap();
+
+    let closest_move_to_food = possible_moves
+        .iter()
+        .min_by_key(|m| {
+            let next = *head + m.coords();
+            let dist = (closest_food.x - next.x).abs()
+                + (closest_food.y - next.y).abs();
+            dist as i32
+        })
+        .unwrap();
+
+    let response = MoveResponse {
+        r#move: **closest_move_to_food,
+        shout: None,
+    };
+    (StatusCode::OK, Json(response))
 }
