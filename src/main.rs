@@ -5,6 +5,8 @@ use axum::{routing::get, Router};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    tracing_subscriber::fmt::init();
+
     let app = Router::new()
         .route("/", get(config::get_config))
         .route("/start", get(game::handle_game_start))

@@ -169,5 +169,7 @@ pub async fn handle_move(Json(input): Json<EngineInput>) -> impl IntoResponse {
         r#move: **closest_move_to_food,
         shout: None,
     };
+
+    tracing::info!("Move: {:?}", response.r#move);
     (StatusCode::OK, Json(response))
 }
