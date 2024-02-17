@@ -17,7 +17,7 @@ impl SnakeConfig {
     const COLOR: &'static str = "#00E6BF";
     const HEAD: &'static str = "default";
     const TAIL: &'static str = "default";
-    const VERSION: &'static str = "0.0.1-alpha.0";
+    const VERSION: &'static str = "1";
 }
 
 impl Default for SnakeConfig {

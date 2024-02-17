@@ -104,7 +104,7 @@ impl Movements {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct MoveResponse {
     pub r#move: Movements,
-    pub shout: Option<String>,
+    pub shout: String,
 }
 
 impl MoveResponse {
@@ -176,7 +176,12 @@ pub async fn handle_move(Json(input): Json<EngineInput>) -> impl IntoResponse {
     let closest_food = food
         .iter()
         .min_by_key(|f| (f.x - head.x).abs() + (f.y - head.y).abs())
-        .unwrap();
+        .expect("There is not food!");
+
+    let mut shout = format!(
+        "I'm at {:?} and the closest food is at {:?}",
+        head, closest_food
+    );
 
     let closest_move_to_food = possible_moves
         .iter()
@@ -184,11 +189,14 @@ pub async fn handle_move(Json(input): Json<EngineInput>) -> impl IntoResponse {
             let next = head + m.coords();
             (closest_food.x - next.x).abs() + (closest_food.y - next.y).abs()
         })
-        .unwrap();
+        .unwrap_or_else(|| {
+            shout = "Im doomed!".to_string();
+            &&Movements::Up
+        });
 
     let response = MoveResponse {
         r#move: **closest_move_to_food,
-        shout: Some("".to_string()),
+        shout,
     };
 
     tracing::info!("Turn: {:?} | Move: {:?}", input.turn, response.r#move);
