@@ -18,10 +18,6 @@ impl SnakeConfig {
     const HEAD: &'static str = "default";
     const TAIL: &'static str = "default";
     const VERSION: &'static str = "0.0.1-alpha.0";
-
-    pub fn new() -> Self {
-        Self::default()
-    }
 }
 
 impl Default for SnakeConfig {

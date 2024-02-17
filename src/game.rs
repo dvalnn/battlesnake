@@ -1,18 +1,9 @@
 use std::collections::HashMap;
 
 use axum::{http::StatusCode, response::IntoResponse, Json};
-use glam::Vec2;
+use glam::IVec2;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-
-#[derive(Debug, Serialize, Deserialize)]
-pub enum GameSources {
-    Tournament,
-    League,
-    Arena,
-    Challenge,
-    Custom,
-}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Ruleset {
@@ -24,18 +15,30 @@ pub struct Ruleset {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Game {
     pub id: String,
-    pub releset: Ruleset,
+    pub ruleset: Ruleset,
     pub map: String,
-    pub timeout: String,
-    pub source: GameSources,
+    pub timeout: i32,
+    pub source: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Coord {
+    x: i32,
+    y: i32,
+}
+
+impl From<Coord> for IVec2 {
+    fn from(coord: Coord) -> Self {
+        IVec2::new(coord.x, coord.y)
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Board {
     height: i32,
     width: i32,
-    food: Vec<Vec2>,
-    hazards: Vec<Vec2>,
+    food: Vec<Coord>,
+    hazards: Vec<Coord>,
     snakes: Vec<Battlesnake>,
 }
 
@@ -51,12 +54,12 @@ pub struct Battlesnake {
     id: String,
     name: String,
     health: i32,
-    body: Vec<Vec2>,
+    body: Vec<Coord>,
     latency: String,
-    head: Vec2,
-    lenght: i32,
+    head: Coord,
+    length: i32,
     shout: String,
-    squard: String,
+    squad: Option<String>,
     customizations: Customizations,
 }
 
@@ -84,12 +87,12 @@ impl Movements {
         Movements::Right,
     ];
 
-    fn coords(&self) -> Vec2 {
+    fn coords(&self) -> IVec2 {
         match self {
-            Movements::Up => Vec2::new(0.0, 1.0),
-            Movements::Down => Vec2::new(0.0, -1.0),
-            Movements::Left => Vec2::new(-1.0, 0.0),
-            Movements::Right => Vec2::new(1.0, 0.0),
+            Movements::Up => IVec2::new(0, 1),
+            Movements::Down => IVec2::new(0, -1),
+            Movements::Left => IVec2::new(-1, 0),
+            Movements::Right => IVec2::new(1, 0),
         }
     }
 }
@@ -126,21 +129,38 @@ pub async fn handle_game_over(
 
 /// Handles POST /move ... used to move the snake
 pub async fn handle_move(Json(input): Json<EngineInput>) -> impl IntoResponse {
-    let head = &input.you.head;
-    let body = &input.you.body;
-    let obstacles = &input.board.hazards;
-    let food = &input.board.food;
+    let head = IVec2::from(input.you.head);
+
+    let body = input
+        .you
+        .body
+        .into_iter()
+        .map(IVec2::from)
+        .collect::<Vec<_>>();
+
+    let obstacles = input
+        .board
+        .hazards
+        .into_iter()
+        .map(IVec2::from)
+        .collect::<Vec<_>>();
+
+    let food = input
+        .board
+        .food
+        .into_iter()
+        .map(IVec2::from)
+        .collect::<Vec<_>>();
+
     let height = input.board.height;
     let width = input.board.width;
 
     let possible_moves = Movements::ALL
         .iter()
         .filter(|m| {
-            let next = *head + m.coords();
-            let inside_map = next.x >= 0.0
-                && next.y >= 0.0
-                && next.x < width as f32
-                && next.y < height as f32;
+            let next = head + m.coords();
+            let inside_map =
+                next.x >= 0 && next.y >= 0 && next.x < width && next.y < height;
             let colision = body.contains(&next) || obstacles.contains(&next);
 
             inside_map && !colision
@@ -149,19 +169,14 @@ pub async fn handle_move(Json(input): Json<EngineInput>) -> impl IntoResponse {
 
     let closest_food = food
         .iter()
-        .min_by_key(|f| {
-            let dist = (f.x - head.x).abs() + (f.y - head.y).abs();
-            dist as i32
-        })
+        .min_by_key(|f| (f.x - head.x).abs() + (f.y - head.y).abs())
         .unwrap();
 
     let closest_move_to_food = possible_moves
         .iter()
         .min_by_key(|m| {
-            let next = *head + m.coords();
-            let dist = (closest_food.x - next.x).abs()
-                + (closest_food.y - next.y).abs();
-            dist as i32
+            let next = head + m.coords();
+            (closest_food.x - next.x).abs() + (closest_food.y - next.y).abs()
         })
         .unwrap();
 
