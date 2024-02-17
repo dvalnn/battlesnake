@@ -188,9 +188,9 @@ pub async fn handle_move(Json(input): Json<EngineInput>) -> impl IntoResponse {
 
     let response = MoveResponse {
         r#move: **closest_move_to_food,
-        shout: None,
+        shout: Some("".to_string()),
     };
 
-    tracing::info!("Move: {:?}", response.r#move);
+    tracing::info!("Turn: {:?} | Move: {:?}", input.turn, response.r#move);
     (StatusCode::OK, Json(response))
 }
