@@ -1,9 +1,7 @@
-use std::collections::HashMap;
-
 use axum::{http::StatusCode, response::IntoResponse, Json};
-use glam::IVec2;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::HashMap;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Ruleset {
@@ -21,15 +19,27 @@ pub struct Game {
     pub source: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(
+    Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Clone, Copy,
+)]
 pub struct Coord {
     x: i32,
     y: i32,
 }
 
-impl From<Coord> for IVec2 {
-    fn from(coord: Coord) -> Self {
-        IVec2::new(coord.x, coord.y)
+impl Coord {
+    fn new(x: i32, y: i32) -> Self {
+        Self { x, y }
+    }
+}
+
+impl std::ops::Add for Coord {
+    type Output = Self;
+    fn add(self, rhs: Self) -> Self::Output {
+        Self {
+            x: self.x + rhs.x,
+            y: self.y + rhs.y,
+        }
     }
 }
 
@@ -91,12 +101,12 @@ impl Movements {
         Movements::Right,
     ];
 
-    fn coords(&self) -> IVec2 {
+    fn coords(&self) -> Coord {
         match self {
-            Movements::Up => IVec2::new(0, 1),
-            Movements::Down => IVec2::new(0, -1),
-            Movements::Left => IVec2::new(-1, 0),
-            Movements::Right => IVec2::new(1, 0),
+            Movements::Up => Coord::new(0, 1),
+            Movements::Down => Coord::new(0, -1),
+            Movements::Left => Coord::new(-1, 0),
+            Movements::Right => Coord::new(1, 0),
         }
     }
 }
@@ -104,7 +114,7 @@ impl Movements {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct MoveResponse {
     pub r#move: Movements,
-    pub shout: String,
+    pub shout: &'static str,
 }
 
 impl MoveResponse {
@@ -117,57 +127,27 @@ pub async fn handle_game_start(
     Json(input): Json<EngineInput>,
 ) -> impl IntoResponse {
     //TODO: process the game start metadata
-    tracing::info!("Game started");
-    tracing::info!("Game id: {}", input.game.id);
-    tracing::info!("Ruleset: {}", input.game.ruleset.name);
-    tracing::info!("Timeout: {}", input.game.timeout);
-    tracing::info!("Map: {}", input.game.map);
+    tracing::info!("Game started | Game id: {}", input.game.id);
     StatusCode::OK
 }
 
 /// Handles POST /end ... used to end the current game
 /// response is irrelevant as the battlesnake engine does not care
 pub async fn handle_game_over(
-    Json(_input): Json<EngineInput>,
+    Json(input): Json<EngineInput>,
 ) -> impl IntoResponse {
     //TODO: log the game over event
-    tracing::info!("Game ended");
-    tracing::info!("------------------");
+    tracing::info!("Game ended | Game id: {}", input.game.id);
     StatusCode::OK
 }
 
 /// Handles POST /move ... used to move the snake
 pub async fn handle_move(Json(input): Json<EngineInput>) -> impl IntoResponse {
-    let head = IVec2::from(input.you.head);
-
-    let body = input
-        .you
-        .body
-        .into_iter()
-        .map(IVec2::from)
-        .collect::<Vec<_>>();
-
-    let obstacles = input
-        .board
-        .hazards
-        .into_iter()
-        .map(IVec2::from)
-        .collect::<Vec<_>>();
-
-    let food = input
-        .board
-        .food
-        .into_iter()
-        .map(IVec2::from)
-        .collect::<Vec<_>>();
-
-    let snakes = input
-        .board
-        .snakes
-        .into_iter()
-        .map(|s| s.body.into_iter().map(IVec2::from).collect::<Vec<_>>())
-        .collect::<Vec<_>>();
-
+    let head = input.you.head;
+    let body = input.you.body;
+    let obstacles = input.board.hazards;
+    let food = input.board.food;
+    let snakes = input.board.snakes;
     let height = input.board.height;
     let width = input.board.width;
 
@@ -179,7 +159,7 @@ pub async fn handle_move(Json(input): Json<EngineInput>) -> impl IntoResponse {
                 next.x >= 0 && next.y >= 0 && next.x < width && next.y < height;
             let colision = body.contains(&next)
                 || obstacles.contains(&next)
-                || snakes.iter().any(|s| s.contains(&next));
+                || snakes.iter().any(|s| s.body.contains(&next));
 
             inside_map && !colision
         })
@@ -190,30 +170,26 @@ pub async fn handle_move(Json(input): Json<EngineInput>) -> impl IntoResponse {
         .min_by_key(|f| (f.x - head.x).abs() + (f.y - head.y).abs())
         .expect("There is not food!");
 
-    let mut shout = format!(
-        "I'm at {:?} and the closest food is at {:?}",
-        head, closest_food
-    );
-
     let closest_move_to_food = possible_moves
         .iter()
         .min_by_key(|m| {
             let next = head + m.coords();
             (closest_food.x - next.x).abs() + (closest_food.y - next.y).abs()
         })
-        .unwrap_or_else(|| {
-            shout = "Im doomed!".to_string();
-            &&Movements::Up
-        });
+        .unwrap_or(&&Movements::Up);
 
     let response = MoveResponse {
         r#move: **closest_move_to_food,
-        shout,
+        shout: "",
     };
 
-    tracing::info!("Turn: {:?} | Move: {:?}", input.turn, response.r#move);
-    tracing::debug!("Shout: {}", response.shout);
-    tracing::debug!("Last move latency: {}", input.you.latency);
+    tracing::info!(
+        "Game: {:?} | Latency: {:?} | Turn: {:?} | Move: {:?}",
+        input.game.id,
+        input.you.latency,
+        input.turn,
+        response.r#move
+    );
 
     (StatusCode::OK, Json(response))
 }
